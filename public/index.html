@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POLY ARENA</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0a;
+      overflow: hidden;
+      font-family: 'Courier New', Courier, monospace;
+      user-select: none;
+    }
+
+    #game-canvas { display: block; }
+
+    /* ── Crosshair ── */
+    #crosshair {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 16px; height: 16px;
+      pointer-events: none;
+      transition: transform 0.08s;
+    }
+    #crosshair::before, #crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(255,255,255,0.9);
+    }
+    #crosshair::before { width: 2px; height: 14px; left: 7px; top: 1px; }
+    #crosshair::after  { width: 14px; height: 2px; left: 1px; top: 7px; }
+    #crosshair.hit::before, #crosshair.hit::after { background: #ff3300; }
+
+    /* ── Health ── */
+    #hud {
+      position: fixed;
+      bottom: 22px; left: 22px;
+      pointer-events: none;
+    }
+    #health-label {
+      color: #aaa;
+      font-size: 11px;
+      letter-spacing: 2px;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+    }
+    #health-bar-bg {
+      width: 200px; height: 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    #health-bar {
+      height: 100%;
+      width: 100%;
+      background: #22dd44;
+      border-radius: 4px;
+      transition: width 0.15s, background 0.4s;
+    }
+    #health-text {
+      margin-top: 5px;
+      color: #fff;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    /* ── Info top-right ── */
+    #info {
+      position: fixed;
+      top: 16px; right: 16px;
+      text-align: right;
+      color: #ccc;
+      font-size: 12px;
+      pointer-events: none;
+      letter-spacing: 1px;
+    }
+    #player-count { margin-bottom: 4px; color: #aaddff; }
+
+    /* ── Kill feed ── */
+    #killfeed {
+      position: fixed;
+      top: 60px; right: 16px;
+      pointer-events: none;
+      width: 280px;
+    }
+    .kill-entry {
+      background: rgba(0,0,0,0.65);
+      padding: 5px 10px;
+      margin-bottom: 4px;
+      font-size: 12px;
+      border-radius: 3px;
+      border-left: 2px solid #ff4444;
+      animation: kfade 3.5s forwards;
+    }
+    @keyframes kfade {
+      0%   { opacity: 1; transform: translateX(0); }
+      80%  { opacity: 1; }
+      100% { opacity: 0; transform: translateX(20px); }
+    }
+
+    /* ── Scoreboard ── */
+    #scoreboard {
+      display: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.9);
+      border: 1px solid #444;
+      color: #fff;
+      padding: 24px 32px;
+      min-width: 460px;
+      border-radius: 4px;
+      backdrop-filter: blur(4px);
+    }
+    #scoreboard h2 {
+      font-size: 14px;
+      letter-spacing: 4px;
+      color: #888;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+    }
+    #scoreboard table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    #scoreboard th {
+      color: #666;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-align: left;
+      padding: 0 12px 8px 12px;
+      border-bottom: 1px solid #333;
+    }
+    #scoreboard td {
+      padding: 7px 12px;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    #score-hint {
+      margin-top: 14px;
+      color: #444;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-align: center;
+    }
+
+    /* ── Death screen ── */
+    #death-screen {
+      display: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+    }
+    #death-title {
+      color: #ff2222;
+      font-size: 52px;
+      font-weight: bold;
+      letter-spacing: 8px;
+      text-shadow: 0 0 30px #ff0000aa;
+    }
+    #death-sub {
+      color: #888;
+      font-size: 14px;
+      letter-spacing: 3px;
+      margin-top: 10px;
+    }
+
+    /* ── Hit flash ── */
+    #hit-flash {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(255, 20, 20, 0.28);
+      pointer-events: none;
+      border: 3px solid rgba(255,0,0,0.4);
+    }
+
+    /* ── Lock message ── */
+    #lock-msg {
+      display: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.75);
+      color: #fff;
+      padding: 18px 36px;
+      font-size: 16px;
+      letter-spacing: 2px;
+      border: 1px solid #555;
+      pointer-events: none;
+    }
+
+    /* ── Start overlay ── */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, #111 0%, #000 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      z-index: 999;
+    }
+    #overlay h1 {
+      font-size: 64px;
+      letter-spacing: 12px;
+      color: #ff4444;
+      text-shadow: 0 0 40px #ff4444aa, 0 0 80px #ff444444;
+      margin-bottom: 8px;
+    }
+    #overlay .subtitle {
+      color: #555;
+      font-size: 12px;
+      letter-spacing: 4px;
+      margin-bottom: 40px;
+    }
+    #overlay .controls {
+      color: #444;
+      font-size: 12px;
+      letter-spacing: 1px;
+      margin-bottom: 32px;
+      line-height: 2;
+      text-align: center;
+    }
+    #overlay .controls span { color: #666; }
+    #name-input {
+      background: #111;
+      color: #fff;
+      border: 1px solid #444;
+      padding: 12px 20px;
+      font-size: 15px;
+      font-family: 'Courier New', monospace;
+      width: 280px;
+      margin-bottom: 14px;
+      letter-spacing: 1px;
+      outline: none;
+    }
+    #name-input:focus { border-color: #ff4444; }
+    #name-input::placeholder { color: #444; }
+    #play-btn {
+      background: #ff4444;
+      color: #fff;
+      border: none;
+      padding: 14px 48px;
+      font-size: 16px;
+      letter-spacing: 4px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      transition: background 0.15s, transform 0.1s;
+    }
+    #play-btn:hover { background: #ff2222; transform: scale(1.03); }
+    #play-btn:active { transform: scale(0.97); }
+  </style>
+</head>
+<body>
+
+<canvas id="game-canvas"></canvas>
+
+<!-- Crosshair -->
+<div id="crosshair"></div>
+
+<!-- Health HUD -->
+<div id="hud">
+  <div id="health-label">Health</div>
+  <div id="health-bar-bg"><div id="health-bar"></div></div>
+  <div id="health-text">100</div>
+</div>
+
+<!-- Top-right info -->
+<div id="info">
+  <div id="player-count">👥 1 online</div>
+  <div id="ammo-info">∞ AUTO RIFLE</div>
+</div>
+
+<!-- Kill feed -->
+<div id="killfeed"></div>
+
+<!-- Scoreboard (Tab) -->
+<div id="scoreboard">
+  <h2>Scoreboard</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>PLAYER</th>
+        <th>KILLS</th>
+        <th>DEATHS</th>
+        <th>HEALTH</th>
+      </tr>
+    </thead>
+    <tbody id="score-rows"></tbody>
+  </table>
+  <div id="score-hint">[ HOLD TAB TO VIEW ]</div>
+</div>
+
+<!-- Death screen -->
+<div id="death-screen">
+  <div id="death-title">YOU DIED</div>
+  <div id="death-sub">RESPAWNING IN 3 SECONDS...</div>
+</div>
+
+<!-- Hit flash -->
+<div id="hit-flash"></div>
+
+<!-- Unlock reminder -->
+<div id="lock-msg">CLICK TO CAPTURE MOUSE</div>
+
+<!-- Start screen -->
+<div id="overlay">
+  <h1>POLY ARENA</h1>
+  <div class="subtitle">LOW POLY MULTIPLAYER FPS</div>
+  <div class="controls">
+    <span>WASD</span> Move &nbsp;|&nbsp; <span>MOUSE</span> Aim &nbsp;|&nbsp;
+    <span>LMB</span> Shoot &nbsp;|&nbsp; <span>TAB</span> Scoreboard<br>
+    Share the URL with friends to play together
+  </div>
+  <input id="name-input" type="text" placeholder="Enter your name..." maxlength="16" autocomplete="off" />
+  <button id="play-btn" onclick="startGame()">PLAY</button>
+</div>
+
+<!-- Libraries -->
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<!-- Game -->
+<script src="/game.js"></script>
+
+<script>
+  // Allow Enter key on name input
+  document.getElementById('name-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') startGame();
+  });
+</script>
+</body>
+</html>
