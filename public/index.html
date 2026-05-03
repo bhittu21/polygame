@@ -1,341 +1,530 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>POLY ARENA</title>
-  <style>
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>POLY ARENA</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 
-    body {
-      background: #0a0a0a;
-      overflow: hidden;
-      font-family: 'Courier New', Courier, monospace;
-      user-select: none;
-    }
+body{
+  background:#000;
+  overflow:hidden;
+  font-family:'Courier New',Courier,monospace;
+  user-select:none;
+  color:#00ff41;
+}
 
-    #game-canvas { display: block; }
+/* scan-lines */
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);
+  pointer-events:none;
+  z-index:9999;
+}
 
-    /* ── Crosshair ── */
-    #crosshair {
-      position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 16px; height: 16px;
-      pointer-events: none;
-      transition: transform 0.08s;
-    }
-    #crosshair::before, #crosshair::after {
-      content: '';
-      position: absolute;
-      background: rgba(255,255,255,0.9);
-    }
-    #crosshair::before { width: 2px; height: 14px; left: 7px; top: 1px; }
-    #crosshair::after  { width: 14px; height: 2px; left: 1px; top: 7px; }
-    #crosshair.hit::before, #crosshair.hit::after { background: #ff3300; }
+/* ── MATRIX CANVAS ── */
+#matrix-rain{position:fixed;inset:0;opacity:.17;z-index:0;pointer-events:none}
 
-    /* ── Health ── */
-    #hud {
-      position: fixed;
-      bottom: 22px; left: 22px;
-      pointer-events: none;
-    }
-    #health-label {
-      color: #aaa;
-      font-size: 11px;
-      letter-spacing: 2px;
-      margin-bottom: 5px;
-      text-transform: uppercase;
-    }
-    #health-bar-bg {
-      width: 200px; height: 8px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    #health-bar {
-      height: 100%;
-      width: 100%;
-      background: #22dd44;
-      border-radius: 4px;
-      transition: width 0.15s, background 0.4s;
-    }
-    #health-text {
-      margin-top: 5px;
-      color: #fff;
-      font-size: 20px;
-      font-weight: bold;
-    }
+/* ── GAME CANVAS ── */
+#game-canvas{display:block;position:fixed;inset:0;z-index:1}
 
-    /* ── Info top-right ── */
-    #info {
-      position: fixed;
-      top: 16px; right: 16px;
-      text-align: right;
-      color: #ccc;
-      font-size: 12px;
-      pointer-events: none;
-      letter-spacing: 1px;
-    }
-    #player-count { margin-bottom: 4px; color: #aaddff; }
+/* ═══════════════════════════════════════
+   START OVERLAY
+   ═══════════════════════════════════════ */
+#overlay{
+  position:fixed;inset:0;z-index:500;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  background:rgba(0,0,0,.92);
+}
+/* grid bg */
+#overlay::before{
+  content:'';position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(0,255,65,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,255,65,.04) 1px,transparent 1px);
+  background-size:50px 50px;
+  pointer-events:none;
+}
+.ov{
+  position:relative;z-index:1;
+  display:flex;flex-direction:column;align-items:center;
+  width:100%;max-width:540px;
+  padding:0 16px;
+}
 
-    /* ── Kill feed ── */
-    #killfeed {
-      position: fixed;
-      top: 60px; right: 16px;
-      pointer-events: none;
-      width: 280px;
-    }
-    .kill-entry {
-      background: rgba(0,0,0,0.65);
-      padding: 5px 10px;
-      margin-bottom: 4px;
-      font-size: 12px;
-      border-radius: 3px;
-      border-left: 2px solid #ff4444;
-      animation: kfade 3.5s forwards;
-    }
-    @keyframes kfade {
-      0%   { opacity: 1; transform: translateX(0); }
-      80%  { opacity: 1; }
-      100% { opacity: 0; transform: translateX(20px); }
-    }
+/* corners */
+.corner{position:absolute;width:14px;height:14px;border-color:#00ff41;border-style:solid;opacity:.5}
+.c-tl{top:10px;left:10px;border-width:2px 0 0 2px}
+.c-tr{top:10px;right:10px;border-width:2px 2px 0 0}
+.c-bl{bottom:34px;left:10px;border-width:0 0 2px 2px}
+.c-br{bottom:34px;right:10px;border-width:0 2px 2px 0}
 
-    /* ── Scoreboard ── */
-    #scoreboard {
-      display: none;
-      position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0,0,0,0.9);
-      border: 1px solid #444;
-      color: #fff;
-      padding: 24px 32px;
-      min-width: 460px;
-      border-radius: 4px;
-      backdrop-filter: blur(4px);
-    }
-    #scoreboard h2 {
-      font-size: 14px;
-      letter-spacing: 4px;
-      color: #888;
-      margin-bottom: 16px;
-      text-transform: uppercase;
-    }
-    #scoreboard table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    #scoreboard th {
-      color: #666;
-      font-size: 11px;
-      letter-spacing: 2px;
-      text-align: left;
-      padding: 0 12px 8px 12px;
-      border-bottom: 1px solid #333;
-    }
-    #scoreboard td {
-      padding: 7px 12px;
-      border-bottom: 1px solid #1a1a1a;
-    }
-    #score-hint {
-      margin-top: 14px;
-      color: #444;
-      font-size: 11px;
-      letter-spacing: 2px;
-      text-align: center;
-    }
+/* TITLE */
+.gtitle{
+  font-size:clamp(42px,8vw,72px);
+  font-weight:bold;
+  letter-spacing:clamp(8px,2vw,16px);
+  color:#00ff41;
+  text-shadow:0 0 20px #00ff41,0 0 60px #00ff4155;
+  margin-bottom:4px;
+  animation:glitch 7s infinite;
+}
+@keyframes glitch{
+  0%,87%,100%{text-shadow:0 0 20px #00ff41,0 0 60px #00ff4155;color:#00ff41}
+  88%{text-shadow:-4px 0 #ff0055,4px 0 #00ffff;color:#0ff}
+  89%{text-shadow:4px 0 #ff0055,-4px 0 #00ffff;color:#f0f;clip-path:polygon(0 55%,100% 55%,100% 75%,0 75%)}
+  90%{text-shadow:0 0 20px #00ff41;color:#00ff41;clip-path:none}
+  94%{text-shadow:-2px 0 #ff3300;clip-path:polygon(0 30%,100% 30%,100% 50%,0 50%)}
+  95%{text-shadow:0 0 20px #00ff41;clip-path:none}
+}
 
-    /* ── Death screen ── */
-    #death-screen {
-      display: none;
-      position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-      pointer-events: none;
-    }
-    #death-title {
-      color: #ff2222;
-      font-size: 52px;
-      font-weight: bold;
-      letter-spacing: 8px;
-      text-shadow: 0 0 30px #ff0000aa;
-    }
-    #death-sub {
-      color: #888;
-      font-size: 14px;
-      letter-spacing: 3px;
-      margin-top: 10px;
-    }
+.cursor{display:inline-block;width:3px;height:.9em;background:#00ff41;margin-left:4px;vertical-align:middle;animation:blink .9s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 
-    /* ── Hit flash ── */
-    #hit-flash {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(255, 20, 20, 0.28);
-      pointer-events: none;
-      border: 3px solid rgba(255,0,0,0.4);
-    }
+.subtitle{color:#005522;font-size:11px;letter-spacing:5px;margin-bottom:32px;text-transform:uppercase}
 
-    /* ── Lock message ── */
-    #lock-msg {
-      display: none;
-      position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0,0,0,0.75);
-      color: #fff;
-      padding: 18px 36px;
-      font-size: 16px;
-      letter-spacing: 2px;
-      border: 1px solid #555;
-      pointer-events: none;
-    }
+/* terminal boxes */
+.tbox{
+  width:100%;border:1px solid #00ff4130;
+  padding:18px 20px;position:relative;
+  background:rgba(0,15,5,.65);margin-bottom:14px;
+}
+.tbox::before{
+  content:attr(data-label);
+  position:absolute;top:-8px;left:14px;
+  background:#000;padding:0 8px;
+  font-size:10px;color:#00ff41;letter-spacing:3px;
+}
+.tlabel{font-size:10px;color:#00883322;letter-spacing:3px;margin-bottom:8px;text-transform:uppercase}
+.tlabel.lit{color:#00aa44}
 
-    /* ── Start overlay ── */
-    #overlay {
-      position: fixed;
-      inset: 0;
-      background: radial-gradient(ellipse at center, #111 0%, #000 100%);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-      z-index: 999;
-    }
-    #overlay h1 {
-      font-size: 64px;
-      letter-spacing: 12px;
-      color: #ff4444;
-      text-shadow: 0 0 40px #ff4444aa, 0 0 80px #ff444444;
-      margin-bottom: 8px;
-    }
-    #overlay .subtitle {
-      color: #555;
-      font-size: 12px;
-      letter-spacing: 4px;
-      margin-bottom: 40px;
-    }
-    #overlay .controls {
-      color: #444;
-      font-size: 12px;
-      letter-spacing: 1px;
-      margin-bottom: 32px;
-      line-height: 2;
-      text-align: center;
-    }
-    #overlay .controls span { color: #666; }
-    #name-input {
-      background: #111;
-      color: #fff;
-      border: 1px solid #444;
-      padding: 12px 20px;
-      font-size: 15px;
-      font-family: 'Courier New', monospace;
-      width: 280px;
-      margin-bottom: 14px;
-      letter-spacing: 1px;
-      outline: none;
-    }
-    #name-input:focus { border-color: #ff4444; }
-    #name-input::placeholder { color: #444; }
-    #play-btn {
-      background: #ff4444;
-      color: #fff;
-      border: none;
-      padding: 14px 48px;
-      font-size: 16px;
-      letter-spacing: 4px;
-      cursor: pointer;
-      font-family: 'Courier New', monospace;
-      font-weight: bold;
-      transition: background 0.15s, transform 0.1s;
-    }
-    #play-btn:hover { background: #ff2222; transform: scale(1.03); }
-    #play-btn:active { transform: scale(0.97); }
-  </style>
+input.tinput{
+  background:transparent;border:none;
+  border-bottom:1px solid #00ff4140;
+  color:#00ff41;
+  font-family:'Courier New',monospace;
+  font-size:16px;width:100%;padding:8px 0;
+  outline:none;letter-spacing:2px;caret-color:#00ff41;
+}
+input.tinput::placeholder{color:#003311}
+input.tinput:focus{border-color:#00ff41}
+
+/* mode toggle */
+.mode-row{display:flex;gap:3px;margin-bottom:0}
+.mbtn{
+  flex:1;padding:10px 8px;
+  background:transparent;border:1px solid #00ff4125;
+  color:#003311;
+  font-family:'Courier New',monospace;
+  font-size:11px;letter-spacing:3px;
+  cursor:pointer;transition:all .15s;
+}
+.mbtn.active{background:#00ff4118;border-color:#00ff41;color:#00ff41}
+.mbtn:hover:not(.active){border-color:#00ff4150;color:#00662211}
+
+/* private section */
+#priv-section{display:none;margin-top:16px;border-top:1px solid #00ff4115;padding-top:16px}
+.room-row{display:flex;gap:8px;align-items:center}
+.tbtn{
+  background:transparent;border:1px solid #00ff4140;
+  color:#00ff41;
+  font-family:'Courier New',monospace;
+  font-size:10px;letter-spacing:2px;
+  padding:9px 12px;cursor:pointer;white-space:nowrap;
+}
+.tbtn:hover{border-color:#00ff41;background:#00ff4112}
+.room-display{
+  font-size:24px;letter-spacing:8px;color:#00ffff;
+  text-align:center;margin-top:12px;
+  text-shadow:0 0 12px #00ffff88;min-height:30px;
+}
+
+/* play button */
+#play-btn{
+  width:100%;padding:16px;
+  background:#00ff4118;border:1px solid #00ff41;
+  color:#00ff41;
+  font-family:'Courier New',monospace;
+  font-size:16px;letter-spacing:6px;cursor:pointer;
+  transition:all .15s;margin-bottom:18px;
+  position:relative;
+}
+#play-btn:hover{background:#00ff4130;box-shadow:0 0 24px #00ff4140}
+#play-btn:active{transform:scale(.98)}
+#play-btn::before{content:'> ';color:#00ff4170}
+
+/* controls list */
+.controls{
+  color:#003311;font-size:11px;
+  letter-spacing:1px;line-height:2.2;
+  text-align:center;
+}
+.controls span{color:#008833}
+
+/* status bar */
+.status-bar{
+  position:fixed;bottom:0;left:0;right:0;height:22px;
+  background:rgba(0,12,4,.9);
+  border-top:1px solid #00ff4122;
+  display:flex;align-items:center;padding:0 14px;
+  gap:22px;font-size:10px;color:#004411;
+  letter-spacing:2px;z-index:501;
+}
+.sdot{width:6px;height:6px;border-radius:50%;background:#00ff41;display:inline-block;margin-right:5px;animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ═══════════════════════════════════════
+   IN-GAME HUD
+   ═══════════════════════════════════════ */
+
+/* crosshair */
+#crosshair{
+  position:fixed;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:16px;height:16px;
+  pointer-events:none;
+  transition:transform .08s;z-index:20;
+}
+#crosshair::before,#crosshair::after{
+  content:'';position:absolute;background:rgba(255,255,255,.88);
+}
+#crosshair::before{width:2px;height:14px;left:7px;top:1px}
+#crosshair::after {width:14px;height:2px;left:1px;top:7px}
+#crosshair.hit::before,#crosshair.hit::after{background:#ff2200}
+
+/* scope overlay */
+#scope-ov{
+  display:none;position:fixed;inset:0;
+  pointer-events:none;z-index:20;
+}
+.scope-bg{
+  position:absolute;inset:0;
+  background:radial-gradient(circle at center,transparent 26.5%,rgba(0,0,0,.97) 28%);
+}
+.scope-ring{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:54vmin;height:54vmin;
+  border:1px solid rgba(0,255,65,.35);
+  border-radius:50%;
+}
+.scope-h{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:54vmin;height:1px;background:rgba(0,255,65,.4);
+}
+.scope-v{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:1px;height:54vmin;background:rgba(0,255,65,.4);
+}
+.scope-dot{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:4px;height:4px;border-radius:50%;
+  background:rgba(255,100,0,.8);
+}
+
+/* health */
+#hud{position:fixed;bottom:22px;left:22px;pointer-events:none;z-index:20}
+#hp-label{color:#005522;font-size:10px;letter-spacing:3px;margin-bottom:5px;text-transform:uppercase}
+#hp-bar-bg{width:200px;height:6px;background:rgba(0,255,65,.08);border:1px solid #00ff4130;overflow:hidden}
+#hp-bar{height:100%;width:100%;background:#00ff41;transition:width .15s,background .4s}
+#hp-text{margin-top:5px;color:#00ff41;font-size:22px;font-weight:bold;text-shadow:0 0 8px #00ff4180}
+
+/* weapon HUD bottom-right */
+#weap-hud{
+  position:fixed;bottom:22px;right:22px;
+  text-align:right;pointer-events:none;z-index:20;
+}
+#weap-name{color:#00ff41;font-size:14px;letter-spacing:3px;text-shadow:0 0 8px #00ff4155}
+#weap-slots{margin-top:8px;display:flex;gap:6px;justify-content:flex-end}
+.wslot{
+  width:32px;height:22px;border:1px solid #00ff4130;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:#003311;
+}
+.wslot.active{border-color:#00ff41;background:#00ff4118;color:#00ff41}
+
+/* top-right info */
+#info{
+  position:fixed;top:12px;right:16px;
+  text-align:right;color:#004411;font-size:11px;
+  pointer-events:none;letter-spacing:2px;z-index:20;
+}
+#player-count{color:#00aa44;margin-bottom:3px}
+#room-ind{font-size:10px}
+
+/* kill feed */
+#killfeed{position:fixed;top:56px;right:16px;pointer-events:none;width:300px;z-index:20}
+.ke{
+  background:rgba(0,8,2,.85);
+  border:1px solid #00ff4118;border-left:2px solid #ff3300;
+  padding:5px 10px;margin-bottom:4px;font-size:12px;border-radius:2px;
+  animation:kfade 3.6s forwards;
+}
+@keyframes kfade{0%,80%{opacity:1}100%{opacity:0}}
+
+/* scoreboard */
+#scoreboard{
+  display:none;position:fixed;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  background:rgba(0,6,2,.96);border:1px solid #00ff4140;
+  color:#00ff41;padding:28px 36px;min-width:480px;
+  border-radius:2px;z-index:50;
+}
+#scoreboard::before{
+  content:'';position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(0,255,65,.015) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,255,65,.015) 1px,transparent 1px);
+  background-size:30px 30px;pointer-events:none;
+}
+#scoreboard h2{font-size:11px;letter-spacing:5px;color:#005522;margin-bottom:20px;text-transform:uppercase}
+#scoreboard table{width:100%;border-collapse:collapse;font-size:13px;position:relative}
+#scoreboard th{color:#004411;font-size:10px;letter-spacing:3px;text-align:left;padding:0 12px 10px;border-bottom:1px solid #00ff4120}
+#scoreboard td{padding:8px 12px;border-bottom:1px solid #00ff4108}
+#score-hint{margin-top:16px;color:#002a11;font-size:10px;letter-spacing:3px;text-align:center}
+
+/* death */
+#death-screen{
+  display:none;position:fixed;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;pointer-events:none;z-index:30;
+}
+#death-title{color:#ff2222;font-size:52px;font-weight:bold;letter-spacing:12px;text-shadow:0 0 40px #ff000088}
+#death-sub{color:#550000;font-size:13px;letter-spacing:4px;margin-top:12px}
+
+/* hit flash */
+#hit-flash{
+  display:none;position:fixed;inset:0;
+  background:rgba(255,20,20,.22);
+  pointer-events:none;border:3px solid rgba(255,0,0,.3);z-index:20;
+}
+
+/* dragon banner */
+#dragon-banner{
+  display:none;position:fixed;
+  top:28%;left:50%;transform:translateX(-50%);
+  text-align:center;pointer-events:none;z-index:30;
+}
+.d-msg{
+  color:#ff6600;font-size:26px;font-weight:bold;letter-spacing:8px;
+  text-shadow:0 0 30px #ff330088;
+  animation:flicker .45s ease-in-out infinite alternate;
+}
+@keyframes flicker{from{opacity:.8}to{opacity:1}}
+
+/* sprint indicator */
+#sprint-ind{
+  display:none;position:fixed;
+  bottom:64px;left:22px;
+  color:#ffcc00;font-size:11px;letter-spacing:3px;
+  text-shadow:0 0 8px #ffcc0088;pointer-events:none;z-index:20;
+}
+
+/* lock msg */
+#lock-msg{
+  display:none;position:fixed;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  background:rgba(0,6,2,.88);border:1px solid #00ff4140;
+  color:#00ff41;padding:16px 32px;font-size:14px;
+  letter-spacing:3px;pointer-events:none;z-index:20;
+}
+</style>
 </head>
 <body>
 
+<!-- Matrix rain -->
+<canvas id="matrix-rain"></canvas>
+
+<!-- 3D canvas -->
 <canvas id="game-canvas"></canvas>
 
 <!-- Crosshair -->
 <div id="crosshair"></div>
 
-<!-- Health HUD -->
-<div id="hud">
-  <div id="health-label">Health</div>
-  <div id="health-bar-bg"><div id="health-bar"></div></div>
-  <div id="health-text">100</div>
+<!-- Scope overlay -->
+<div id="scope-ov">
+  <div class="scope-bg"></div>
+  <div class="scope-ring"></div>
+  <div class="scope-h"></div>
+  <div class="scope-v"></div>
+  <div class="scope-dot"></div>
 </div>
 
-<!-- Top-right info -->
+<!-- Health HUD -->
+<div id="hud">
+  <div id="hp-label">♥ HEALTH</div>
+  <div id="hp-bar-bg"><div id="hp-bar"></div></div>
+  <div id="hp-text">100</div>
+</div>
+
+<!-- Weapon HUD -->
+<div id="weap-hud">
+  <div id="weap-name">AUTO RIFLE</div>
+  <div id="weap-slots">
+    <div class="wslot active" id="slot-0">1</div>
+    <div class="wslot" id="slot-1">2</div>
+  </div>
+</div>
+
+<!-- Info -->
 <div id="info">
-  <div id="player-count">👥 1 online</div>
-  <div id="ammo-info">∞ AUTO RIFLE</div>
+  <div id="player-count">◉ 1 online</div>
+  <div id="room-ind">GLOBAL</div>
 </div>
 
 <!-- Kill feed -->
 <div id="killfeed"></div>
 
-<!-- Scoreboard (Tab) -->
+<!-- Scoreboard -->
 <div id="scoreboard">
-  <h2>Scoreboard</h2>
+  <h2>// SCOREBOARD</h2>
   <table>
     <thead>
-      <tr>
-        <th>PLAYER</th>
-        <th>KILLS</th>
-        <th>DEATHS</th>
-        <th>HEALTH</th>
-      </tr>
+      <tr><th>CALLSIGN</th><th>KILLS</th><th>DEATHS</th><th>HP</th></tr>
     </thead>
     <tbody id="score-rows"></tbody>
   </table>
-  <div id="score-hint">[ HOLD TAB TO VIEW ]</div>
+  <div id="score-hint">[ HOLD TAB ]</div>
 </div>
 
 <!-- Death screen -->
 <div id="death-screen">
-  <div id="death-title">YOU DIED</div>
+  <div id="death-title">[ ELIMINATED ]</div>
   <div id="death-sub">RESPAWNING IN 3 SECONDS...</div>
 </div>
 
 <!-- Hit flash -->
 <div id="hit-flash"></div>
 
-<!-- Unlock reminder -->
-<div id="lock-msg">CLICK TO CAPTURE MOUSE</div>
-
-<!-- Start screen -->
-<div id="overlay">
-  <h1>POLY ARENA</h1>
-  <div class="subtitle">LOW POLY MULTIPLAYER FPS</div>
-  <div class="controls">
-    <span>WASD</span> Move &nbsp;|&nbsp; <span>MOUSE</span> Aim &nbsp;|&nbsp;
-    <span>LMB</span> Shoot &nbsp;|&nbsp; <span>TAB</span> Scoreboard<br>
-    Share the URL with friends to play together
-  </div>
-  <input id="name-input" type="text" placeholder="Enter your name..." maxlength="16" autocomplete="off" />
-  <button id="play-btn" onclick="startGame()">PLAY</button>
+<!-- Dragon banner -->
+<div id="dragon-banner">
+  <div class="d-msg" id="dragon-msg">⚠ DRAGON INCOMING ⚠</div>
 </div>
 
-<!-- Libraries -->
-<script src="/socket.io/socket.io.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Sprint indicator -->
+<div id="sprint-ind">⚡ SPRINTING</div>
 
-<!-- Game -->
-<script src="/game.js"></script>
+<!-- Lock msg -->
+<div id="lock-msg">[ CLICK TO ENTER COMBAT MODE ]</div>
+
+<!-- START OVERLAY -->
+<div id="overlay">
+  <div class="corner c-tl"></div>
+  <div class="corner c-tr"></div>
+  <div class="corner c-bl"></div>
+  <div class="corner c-br"></div>
+
+  <div class="ov">
+    <div class="gtitle">POLY ARENA<span class="cursor"></span></div>
+    <div class="subtitle">// MULTIPLAYER FPS · TACTICAL ARENA //</div>
+
+    <!-- Name -->
+    <div class="tbox" data-label="CALLSIGN">
+      <div class="tlabel lit">> IDENTIFY YOURSELF_</div>
+      <input class="tinput" id="name-inp" type="text" placeholder="GHOST_9999" maxlength="16" autocomplete="off"/>
+    </div>
+
+    <!-- Server -->
+    <div class="tbox" data-label="SERVER CONFIG">
+      <div class="mode-row">
+        <button class="mbtn active" id="btn-pub"  onclick="setMode('public')">◉ PUBLIC SERVER</button>
+        <button class="mbtn"        id="btn-priv" onclick="setMode('private')">⊕ PRIVATE ROOM</button>
+      </div>
+
+      <div id="priv-section">
+        <div class="tlabel lit" style="margin-top:14px">> ROOM CODE_</div>
+        <div class="room-row">
+          <input class="tinput" id="room-inp" type="text" placeholder="E.G. ALPHA7X" maxlength="8" autocomplete="off"/>
+          <button class="tbtn" onclick="genCode()">GENERATE</button>
+        </div>
+        <div class="room-display" id="room-display"></div>
+        <div style="font-size:10px;color:#004411;letter-spacing:2px;margin-top:8px">Share this code with friends — they enter the same code to join you.</div>
+      </div>
+    </div>
+
+    <button id="play-btn" onclick="startGame()">INITIALIZE COMBAT</button>
+
+    <div class="controls">
+      <span>WASD</span> MOVE &nbsp;·&nbsp; <span>SHIFT</span> SPRINT &nbsp;·&nbsp;
+      <span>LMB</span> SHOOT &nbsp;·&nbsp; <span>RMB</span> SCOPE<br>
+      <span>1 / 2</span> WEAPONS &nbsp;·&nbsp; <span>SCROLL</span> SWITCH WEAPON &nbsp;·&nbsp;
+      <span>TAB</span> SCOREBOARD<br>
+      <span style="color:#002a11">Every 60–120 s a dragon circles the arena — survive its shadow.</span>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <span><span class="sdot"></span>SYSTEM ONLINE</span>
+    <span>NODE.JS + SOCKET.IO</span>
+    <span>THREE.JS r128</span>
+    <span id="st-ping">RTT: --ms</span>
+  </div>
+</div>
 
 <script>
-  // Allow Enter key on name input
-  document.getElementById('name-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') startGame();
+/* ── Matrix rain ── */
+(function(){
+  const c=document.getElementById('matrix-rain');
+  const ctx=c.getContext('2d');
+  c.width=window.innerWidth; c.height=window.innerHeight;
+  const chars='アイウエオカキクケコ01KILL01FRAG{}ARENA0POLY<>GHOST01NULL0xFF01';
+  const cols=Math.floor(window.innerWidth/14);
+  const drops=Array.from({length:cols},()=>Math.random()*-60);
+  function draw(){
+    ctx.fillStyle='rgba(0,0,0,0.04)';
+    ctx.fillRect(0,0,c.width,c.height);
+    drops.forEach((y,i)=>{
+      ctx.fillStyle=(Math.random()>.85)?'#aaffbb':'#004411';
+      ctx.font='13px monospace';
+      ctx.fillText(chars[Math.floor(Math.random()*chars.length)],i*14,y*14);
+      if(y*14>c.height&&Math.random()>.975) drops[i]=0;
+      drops[i]+=.55+Math.random()*.4;
+    });
+  }
+  setInterval(draw,40);
+})();
+
+/* ── Mode toggle ── */
+let gameMode='public';
+function setMode(m){
+  gameMode=m;
+  document.getElementById('btn-pub').classList.toggle('active',m==='public');
+  document.getElementById('btn-priv').classList.toggle('active',m==='private');
+  document.getElementById('priv-section').style.display=m==='private'?'block':'none';
+}
+
+/* ── Generate code ── */
+function genCode(){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ2346789';
+  let code='';
+  for(let i=0;i<6;i++) code+=chars[Math.floor(Math.random()*chars.length)];
+  document.getElementById('room-inp').value=code;
+  document.getElementById('room-display').textContent=code;
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('room-inp').addEventListener('input',function(){
+    document.getElementById('room-display').textContent=this.value.toUpperCase();
   });
+  document.getElementById('name-inp').addEventListener('keydown',e=>{
+    if(e.key==='Enter') startGame();
+  });
+});
+
+/* cosmetic ping */
+setInterval(()=>{
+  const el=document.getElementById('st-ping');
+  if(el) el.textContent='RTT: '+(15+Math.floor(Math.random()*35))+'ms';
+},2200);
 </script>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="/game.js"></script>
 </body>
 </html>
